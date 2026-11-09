@@ -1,5 +1,5 @@
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "sk_test_XXXXXXXXXXXXXXXXXXXXXXXX";
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
 import https from "https";
 
@@ -82,4 +82,5 @@ export async function chargeUser(gmail, amount, command, channel = "paystack") {
         expires_at: paymentRes.data.account_expires_at
     };
 }
+
 
