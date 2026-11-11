@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pay Park – ESP32 car-park payment system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F3F5F7; --card:#fff; --ink:#14202B; --muted:#51606E; --line:#D5DCE3;
+  --blue:#0B57D0; --bay:#F5C518; --lcd:#A9C23B; --lcd-ink:#1E2A0A;
+  --head:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:1.5rem}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 1.0625rem/1.65 var(--body)}
+a{color:var(--blue)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--bay);outline-offset:2px}
+.wrap{display:grid;grid-template-columns:15rem minmax(0,1fr);max-width:76rem;margin:0 auto}
+nav{position:sticky;top:0;align-self:start;height:100vh;padding:2rem 1.5rem;border-right:2px dashed var(--bay)}
+nav .brand{font:700 1.75rem/1 var(--head);letter-spacing:.01em;margin:0 0 1.5rem}
+nav .brand span{display:inline-block;background:var(--blue);color:#fff;padding:.1em .35em .15em;border-radius:.2em;margin-right:.3em}
+nav a{display:block;padding:.35rem 0;color:var(--muted);text-decoration:none;font-weight:500}
+nav a:hover{color:var(--blue)}
+main{padding:2.5rem clamp(1.25rem,4vw,3.5rem) 4rem;min-width:0}
+h1,h2,h3{font-family:var(--head);line-height:1.05;margin:0}
+h1{font-size:clamp(2.75rem,7vw,4.75rem);font-weight:700}
+h2{font-size:2.25rem;font-weight:700;margin:4rem 0 1rem;padding-top:1rem;border-top:6px solid var(--ink)}
+h3{font-size:1.4rem;font-weight:600;margin:2rem 0 .5rem}
+p{margin:.75rem 0;max-width:68ch}
+.lede{font-size:1.25rem;color:var(--muted);max-width:56ch}
+code{font:500 .9em var(--mono);background:#E5EAF0;padding:.1em .35em;border-radius:.25em}
+pre{background:var(--ink);color:#E9EEF3;padding:1rem 1.25rem;border-radius:.5rem;overflow-x:auto;font:400 .875rem/1.6 var(--mono);margin:1rem 0}
+pre code{background:none;padding:0;font:inherit}
+.lcd-frame{display:inline-block;background:#1C2530;padding:1.1rem 1.25rem;border-radius:.75rem;margin:2rem 0 .5rem;box-shadow:inset 0 0 0 3px #2E3B4A}
+.lcd{background:var(--lcd);color:var(--lcd-ink);font:500 clamp(1rem,3.6vw,1.6rem)/1.5 var(--mono);padding:.6rem .9rem;border-radius:.3rem;box-shadow:inset 0 2px 6px rgba(0,0,0,.35);white-space:pre}
+.cap{font-size:.9rem;color:var(--muted);margin:0 0 1.5rem}
+.table-wrap{overflow-x:auto;margin:1rem 0}
+table{border-collapse:collapse;width:100%;min-width:30rem;background:var(--card)}
+th,td{text-align:left;padding:.6rem .85rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 1.05rem var(--head);background:#E9EEF3;border-bottom:2px solid var(--ink)}
+.steps{counter-reset:s;list-style:none;padding:0;margin:1.5rem 0;display:grid;gap:.75rem}
+.steps li{counter-increment:s;display:grid;grid-template-columns:2.5rem 1fr;gap:.9rem;align-items:start;background:var(--card);padding:.9rem 1rem;border-left:6px solid var(--blue)}
+.steps li::before{content:counter(s);font:700 1.6rem/1 var(--head);color:var(--blue)}
+.method{display:inline-block;font:500 .8rem var(--mono);padding:.1em .5em;border-radius:.25em;background:var(--blue);color:#fff;margin-right:.4rem}
+.method.get{background:#1B7F4B}
+.lot{max-width:42rem;margin:1.5rem 0 .5rem;border-radius:.75rem;overflow:hidden;background:#2F3A47;line-height:0}
+.lot svg{width:100%;height:auto;display:block}
+.lot .car{transform:translate(375px,80px) rotate(-90deg);animation:drive 12s infinite}
+.lot .arm{transform-origin:100px 210px;animation:arm 12s infinite}
+.lot .hi{opacity:.45;animation:hi 12s infinite}
+.lot .t-pay{animation:tpay 12s infinite}
+.lot .t-paid{opacity:1;animation:tpaid 12s infinite}
+@keyframes drive{
+  0%{transform:translate(-50px,175px) rotate(0deg);opacity:0;animation-timing-function:ease-out}
+  3%{opacity:1}
+  24%{transform:translate(50px,175px) rotate(0deg)}
+  46%{transform:translate(50px,175px) rotate(0deg);animation-timing-function:ease-in-out}
+  72%{transform:translate(375px,175px) rotate(0deg);animation-timing-function:ease-in-out}
+  84%{transform:translate(375px,80px) rotate(-90deg);opacity:1}
+  95%{transform:translate(375px,80px) rotate(-90deg);opacity:1}
+  100%{transform:translate(375px,80px) rotate(-90deg);opacity:0}
+}
+@keyframes arm{0%,40%{transform:rotate(0)}45%,58%{transform:rotate(90deg)}64%,100%{transform:rotate(0)}}
+@keyframes hi{0%,83%{opacity:0}88%,96%{opacity:.45}100%{opacity:0}}
+@keyframes tpay{0%,37%{opacity:1}39%,100%{opacity:0}}
+@keyframes tpaid{0%,37%{opacity:0}40%,96%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.lot .car,.lot .arm,.lot .hi,.lot .t-pay,.lot .t-paid{animation:none}.lot .t-pay{opacity:0}}
+footer{margin-top:4rem;color:var(--muted);font-size:.95rem}
+@media (max-width:52rem){
+  .wrap{display:block}
+  nav{position:static;height:auto;border-right:0;border-bottom:2px dashed var(--bay);padding:1rem 1.25rem}
+  nav .links{display:flex;flex-wrap:wrap;gap:.25rem 1.1rem}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Sections">
+  <p class="brand"><span>P</span>Pay Park</p>
+  <div class="links">
+    <a href="#overview">Overview</a>
+    <a href="#flow">How it works</a>
+    <a href="#hardware">Hardware</a>
+    <a href="#setup">Getting started</a>
+    <a href="#api">API reference</a>
+  </div>
+</nav>
+
+<main>
+<header id="overview">
+  <h1>Park, pay by transfer, drive in.</h1>
+  <p class="lede">Pay Park is a self-service car-park kiosk. An ESP32 shows a one-time bank account, the driver pays ₦100, and the gate opens as soon as Paystack confirms it.</p>
+  <div class="lcd-frame" role="img" aria-label="Kiosk LCD showing a scrolling welcome message">
+    <div class="lcd" id="lcd1">    Pay Park!   </div>
+    <div class="lcd" id="lcd2"></div>
+  </div>
+  <p class="cap">The kiosk's 16×2 screen, as the firmware scrolls it.</p>
+  <figure class="lot" style="margin-left:0;margin-right:0">
+    <svg viewBox="0 0 640 220" role="img" aria-label="A car waits at the gate, the kiosk shows paid, the gate lifts and the car parks in space A3">
+      <defs>
+        <g id="car">
+          <rect x="-30" y="-16" width="60" height="32" rx="8" fill="currentColor"/>
+          <rect x="6" y="-12" width="13" height="24" rx="3" fill="#1C2530"/>
+          <rect x="-24" y="-11" width="8" height="22" rx="2" fill="#1C2530"/>
+          <rect x="27" y="-13" width="3" height="7" fill="#fff"/><rect x="27" y="6" width="3" height="7" fill="#fff"/>
+        </g>
+      </defs>
+      <rect width="640" height="220" fill="#3A4553"/>
+      <rect y="140" width="640" height="70" fill="#2B343F"/>
+      <line x1="0" y1="175" x2="640" y2="175" stroke="#F5C518" stroke-width="3" stroke-dasharray="16 12"/>
+      <rect x="150" y="20" width="90" height="110" fill="none" stroke="#fff" stroke-width="2" opacity=".8"/><text x="195" y="122" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#fff" opacity=".75">A1</text><rect x="240" y="20" width="90" height="110" fill="none" stroke="#fff" stroke-width="2" opacity=".8"/><text x="285" y="122" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#fff" opacity=".75">A2</text><rect x="330" y="20" width="90" height="110" fill="none" stroke="#fff" stroke-width="2" opacity=".8"/><text x="375" y="122" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#fff" opacity=".75">A3</text><rect x="420" y="20" width="90" height="110" fill="none" stroke="#fff" stroke-width="2" opacity=".8"/><text x="465" y="122" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#fff" opacity=".75">A4</text><rect x="510" y="20" width="90" height="110" fill="none" stroke="#fff" stroke-width="2" opacity=".8"/><text x="555" y="122" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#fff" opacity=".75">A5</text>
+      <rect class="hi" x="330" y="20" width="90" height="110" fill="#0B57D0"/>
+      <use href="#car" x="195" y="75" transform="rotate(-90 195 75)" style="color:#8A97A6"/>
+      <use href="#car" x="555" y="75" transform="rotate(-90 555 75)" style="color:#6F8FB5"/>
+      <rect x="36" y="80" width="80" height="46" rx="6" fill="#1C2530"/>
+      <rect x="42" y="86" width="68" height="22" rx="3" fill="#A9C23B"/>
+      <text class="t-pay" x="76" y="101" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" font-weight="500" fill="#1E2A0A">PAY 100</text>
+      <text class="t-paid" x="76" y="101" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" font-weight="500" fill="#1E2A0A">PAID</text>
+      <rect x="92" y="205" width="16" height="10" rx="2" fill="#1C2530"/>
+      <g class="arm"><rect x="97" y="140" width="6" height="70" fill="#fff"/><rect x="97" y="140" width="6" height="14" fill="#D9332B"/><rect x="97" y="168" width="6" height="14" fill="#D9332B"/><rect x="97" y="196" width="6" height="14" fill="#D9332B"/></g>
+      <use class="car" href="#car" style="color:#F5C518"/>
+    </svg>
+  </figure>
+  <p class="cap">Pay, the gate lifts, and the car parks in its assigned space.</p>
+
+  <p>The system has two parts: a Node.js and Express API that talks to Paystack, and ESP32 firmware that runs the LCD, buttons, buzzer and servo gate.</p>
+</header>
+
+<section id="flow">
+  <h2>How it works</h2>
+  <ol class="steps">
+    <li><div>The driver presses <strong>Next</strong>. The kiosk calls <code>POST /charge</code> on the API.</div></li>
+    <li><div>The API asks Paystack for a one-time virtual bank account (30-minute expiry) and assigns a parking space.</div></li>
+    <li><div>The kiosk scrolls the account number across the LCD. The driver transfers ₦100.</div></li>
+    <li><div>Paystack sends a <code>charge.success</code> event to <code>/webhook</code>. The API marks the order paid.</div></li>
+    <li><div>The API calls <code>POST /paid</code> on the kiosk. The screen shows the space, the buzzer sounds and the gate opens.</div></li>
+  </ol>
+  <h3>Kiosk states</h3>
+  <div class="table-wrap"><table>
+    <tr><th>State</th><th>What happens</th></tr>
+    <tr><td><code>start</code></td><td>Welcome screen. Waits for <strong>Next</strong>.</td></tr>
+    <tr><td><code>charge</code></td><td>Requests a billing profile from the API.</td></tr>
+    <tr><td><code>display_aza</code></td><td>Shows the account number. <strong>Next</strong> re-checks payment, <strong>Back</strong> cancels.</td></tr>
+    <tr><td><code>thanks</code></td><td>Shows the space, opens the gate, returns to <code>start</code>.</td></tr>
+  </table></div>
+</section>
+
+<section id="hardware">
+  <h2>Hardware</h2>
+  <p>Board: ESP-WROOM-32 (ESP32 Dev Module), 16×2 I2C LCD at address <code>0x27</code>, two push buttons wired to ground (internal pull-ups), a buzzer and a servo.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Function</th><th>GPIO</th></tr>
+    <tr><td>Next button</td><td>13</td></tr>
+    <tr><td>Back button</td><td>14</td></tr>
+    <tr><td>Buzzer</td><td>26</td></tr>
+    <tr><td>Servo signal</td><td>4</td></tr>
+    <tr><td>LCD SDA / SCL</td><td>21 / 22</td></tr>
+  </table></div>
+</section>
+
+<section id="setup">
+  <h2>Getting started</h2>
+  <p>You need Node.js 20.6 or later, a Paystack secret key, Arduino IDE 2.x with ESP32 support, and a Cloudflare Tunnel so the API can reach the kiosk.</p>
+
+  <h3>1. Run the backend</h3>
+<pre><code>npm install
+echo "PAYSTACK_SECRET_KEY=sk_test_xxxxxxxx" &gt; .env
+npm test      # development: nodemon, loads .env
+npm start     # production: set variables in your host</code></pre>
+  <p>The API listens on port <code>3000</code>. <code>npm start</code> does not load <code>.env</code>, so on Render or similar, set the key in the dashboard.</p>
+
+  <h3>2. Flash the firmware</h3>
+  <p>Install <strong>aWOT</strong>, <strong>ArduinoJson</strong> 7.x, <strong>ESP32Servo</strong>, <strong>LiquidCrystal_I2C</strong> and <strong>ESP32HTTPClient</strong>. In <code>code.ino</code> set:</p>
+<pre><code>const char* WIFI_SSID = "YOUR_WIFI_NAME";
+const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
+ESP32HTTPClient client("https://&lt;your-api-host&gt;");</code></pre>
+  <p>Select <strong>ESP32 Dev Module</strong>, upload, then open the Serial Monitor at 115200 baud to read the kiosk's IP address.</p>
+
+  <h3>3. Expose the kiosk</h3>
+  <p>Give the ESP32 a fixed IP. In Cloudflare, create a tunnel with a published application route pointing to <code>http://&lt;ESP32_IP&gt;:80</code>, then set the notify URL in <code>src/functions/webhook.js</code> to <code>https://&lt;your-tunnel-hostname&gt;/paid/</code>.</p>
+
+  <h3>4. Add the Paystack webhook</h3>
+  <p>In the Paystack dashboard, open <strong>Settings → API Keys &amp; Webhooks</strong> and set the webhook URL to <code>https://&lt;your-api-host&gt;/webhook</code>.</p>
+</section>
+
+<section id="api">
+  <h2>API reference</h2>
+  <h3>Backend</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="method get">GET</span><code>/</code></td><td>Health check</td></tr>
+    <tr><td><span class="method">POST</span><code>/charge</code></td><td>Create a payment session and assign a space</td></tr>
+    <tr><td><span class="method get">GET</span><code>/paid/:reference</code></td><td>Check whether a payment arrived</td></tr>
+    <tr><td><span class="method">POST</span><code>/webhook</code></td><td>Paystack webhook receiver</td></tr>
+  </table></div>
+<pre><code>POST /charge  →  200
+{
+  "reference": "string",
+  "account_number": "string",
+  "bank_name": "string",
+  "account_name": "string",
+  "expires_at": "2026-01-01T12:30:00.000Z"
+}
+
+GET /paid/&lt;reference&gt;  →  200
+{ "paid": true, "park_space_u": "A1" }</code></pre>
+  <p>An unknown reference returns <code>{ "paid": false, "park_space_u": null }</code>.</p>
+
+  <h3>Kiosk</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="method get">GET</span><code>/status</code></td><td>Device status and uptime in seconds</td></tr>
+    <tr><td><span class="method">POST</span><code>/paid</code></td><td>Tell the kiosk a payment succeeded</td></tr>
+  </table></div>
+<pre><code>curl http://&lt;ESP32_IP&gt;/status
+curl -X POST http://&lt;ESP32_IP&gt;/paid \
+  -H "Content-Type: application/json" \
+  -d '{"park_space":"A1"}'</code></pre>
+</section>
+
+
+<footer>Built by Osiaru Tech. Released under the ISC License.</footer>
+</main>
+</div>
+
+<script>
+(function(){
+  var el=document.getElementById("lcd2"),pad="                ";
+  var msg=pad+"Welcome to Pay Park... Please pay 100 to park... Press next to continue.";
+  var i=0;
+  function frame(){
+    var s=msg.substring(i,i+16);
+    while(s.length<16)s+=" ";
+    el.textContent=s;
+    i=(i+1)%msg.length;
+  }
+  frame();
+  if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    el.textContent="Press next to go ";
+    return;
+  }
+  setInterval(frame,300);
+})();
+</script>
+</body>
+</html>
