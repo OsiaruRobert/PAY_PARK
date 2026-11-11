@@ -24,17 +24,37 @@ export default async function webhook(req, res) {
             }
         });
 
+        let park_space_name = "";
         park_space.forEach((item) => {
             if (item.reference === reference) {
                 console.log("Paid");
                 item.status = "occupied";
+                park_space_name = item.name;
             }
         });
 
+        await notify(park_space_name);
 
     } catch (err) {
         console.log(`We noticed ${err.message}`);
         res.status(200)
             .json({ "message": "Welcome To PrpjectPQ" });
+    }
+}
+
+
+async function notify(P_S) {
+    try {
+        const notify_Req = await fetch(`https://robotics.osiaru.top/paid/`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                "park_space": P_S
+            })
+        });
+    } catch (err) {
+        console.error(`Error notifying park space ${P_S}: ${err.message}`);
     }
 }

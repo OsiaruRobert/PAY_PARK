@@ -2,11 +2,20 @@
 #include "ESP32HTTPClient.h"
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>  // Included for I2C communication
+#include <ESP32Servo.h>
+#include <aWOT.h>
+#include <ArduinoJson.h>
 
-// Set the LCD address to 0x27 (or 0x3F) for a 16 chars and 2 line display
+//Library setup
+Servo myservo;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 ESP32HTTPClient client("https://pay-park-api.onrender.com");
+WiFiServer server(80);
+App app;
 
+
+
+//variables
 const int next_btn = 13;
 const int back_btn = 14;
 
@@ -39,6 +48,11 @@ String scrollMessage = spacing + "Welcome to Pay Park! Please tap next to start.
 int startIndex = 0;
 unsigned long lastScrollTime = 0;
 int scrollSpeedMs = 300;  // FIXED: Removed const so speed can be changed dynamically
+
+//Internet
+const char* API_KEY = "change-this-to-something-long";
+const char* WIFI_SSID = "OSIARU";
+const char* WIFI_PASS = "11111110";
 
 // TIMING HELPERS FOR POLLING
 unsigned long lastPollTime = 0;
@@ -116,6 +130,51 @@ void buttonClicked(int buttonPressed) {
   }
 }
 
+
+// Returns true if the key is correct. Otherwise replies 401 and returns false.
+bool checkKey(Request& req, Response& res) {
+  // char* key = req.get("X-API-Key");
+  // if (key == NULL || strcmp(key, API_KEY) != 0) {
+  //   res.sendStatus(401);
+  //   return false;
+  // }
+  return true;
+}
+
+
+// GET /status
+void getStatus(Request& req, Response& res) {
+  if (!checkKey(req, res)) return;
+  res.set("Content-Type", "application/json");
+  res.print("{\"status\":\"ok\",\"uptime\":");
+  res.print((int)(millis() / 1000));
+  res.print("}");
+}
+
+// POST /PAID { park_space}
+// POST /led   body: {"state":"on"}  or  {"state":"off"}
+void postPaid(Request& req, Response& res) {
+  if (!checkKey(req, res)) return;
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, req);
+
+  res.set("Content-Type", "application/json");
+  if (err) {
+    res.status(400);
+    res.print("{\"error\":\"invalid json\"}");
+    return;
+  }
+
+  const char* return_park_space = doc["park_space"] | "";  // "" if missing
+  park_space = return_park_space;
+  thanks_func();
+
+  res.status(201);
+  res.print("{\"message\":\"Payment recieved\"}");
+}
+
+
 void setup() {
   Wire.begin(21, 22);  // Initialize I2C communication on pins (SDA=21, SCL=22)
 
@@ -134,14 +193,23 @@ void setup() {
   lcd.setCursor(0, 0);
   lcd.print("  PAY PARK  ");
 
-  WiFi.begin("OSIARU", "11111111");
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
   Serial.println("\nConnected to WiFi");
 
+ Serial.println(WiFi.localIP());
+
+  app.get("/status", &getStatus);
+  app.post("/paid", &postPaid);
+
+  server.begin();
+
   client.setInsecure();  // Bypass local SSL certificate check for ngrok
+  myservo.attach(4);
+  myservo.write(0);  // Close gate
 
   // Call start function to cleanly set up the initial display state text
   start_func();
@@ -154,6 +222,8 @@ void start_func() {
   can_click_next = true;
   can_click_back = false;
   reference = "";
+  myservo.write(0);  // Close gate
+
 
   lcd.setCursor(0, 0);
   lcd.print("    Pay Park!  ");
@@ -198,7 +268,7 @@ void display_aza_func() {
   lcd.setCursor(0, 0);
   lcd.print("Pls pay #100 to");
   // chargeMessage = "Please pay #100 =>" + account_number + " " + account_bank + " (" + account_name + ")";
-  chargeMessage = "  " + account_number + " " + account_bank;
+  chargeMessage = "  " + account_number + " " + account_bank + " #100.";
   updateScrollMessage(chargeMessage, 400);
 }
 
@@ -231,12 +301,32 @@ void monitorpayment_func() {
 void thanks_func() {
   lcd.setCursor(0, 0);
   lcd.clear();
-  lcd.print("PARK IN " + park_space);
-  updateScrollMessage("Thanks for Parking with us!", 100);
+  lcd.print("    SUCCESS     ");
+
+  lcd.setCursor(0, 1);
+  lcd.print("PARK IN : " + park_space);
+
   beep(3, 150);
+  //problem here
+
+
+
+  myservo.write(0);  // Open gate
+  delay(2000);        // Freeze everything for 2 seconds while vehicle moves
+  myservo.write(90);   // Close gate
+
+  start_func();  // CRITICAL FIX: Automatically goes back to start state
 }
 
+
+
 void loop() {
+
+  WiFiClient clientw = server.available();
+  if (clientw.connected()) {
+    app.process(&clientw);
+  }
+
   next_btn_state = digitalRead(next_btn);
   back_btn_state = digitalRead(back_btn);
 
@@ -256,13 +346,13 @@ void loop() {
   last_next_state = next_btn_state;
   last_back_state = back_btn_state;
 
-  // AUTOMATED NON-BLOCKING BACKGROUND POLLING TIMER
-  if (current_state == "display_aza") {
-    if (millis() - lastPollTime >= pollIntervalMs) {
-      lastPollTime = millis();
-      monitorpayment_func();  // Hit node route directly
-    }
-  }
+  // // AUTOMATED NON-BLOCKING BACKGROUND POLLING TIMER
+  // if (current_state == "display_aza") {
+  //   if (millis() - lastPollTime >= pollIntervalMs) {
+  //     lastPollTime = millis();
+  //     monitorpayment_func();  // Hit node route directly
+  //   }
+  // }
 
   // GLOBAL NON-BLOCKING MARQUEE ENGINE (Runs on Row 1)
   if (millis() - lastScrollTime >= scrollSpeedMs) {
@@ -284,4 +374,3 @@ void loop() {
     }
   }
 }
-s
